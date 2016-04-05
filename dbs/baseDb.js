@@ -1,7 +1,5 @@
 'use strict'
 
-let Q = require('q');
-
 // All collection dbs extend this base db
 // Put all common queries in here for reusability
 class BaseDb {
@@ -12,7 +10,7 @@ class BaseDb {
     }
     
     getAll() {
-        let deferred = Q.defer();
+        let deferred = Promise.defer();
         
         this.collection.find({}).toArray((err, records) => {
             if (err) {

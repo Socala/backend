@@ -1,6 +1,5 @@
 'use strict';
 
-var Q = require('q');
 var BaseDb = require('./baseDb');
 
 class UserDb extends BaseDb {

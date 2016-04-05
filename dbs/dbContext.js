@@ -2,7 +2,6 @@
 var MongoClient = require('mongodb').MongoClient;
 var userDb = require('./userDb');
 var config = require('../dbConfig.json');
-var Q = require('Q');
 
 function DbContext() {
     this.db = null;
@@ -10,7 +9,7 @@ function DbContext() {
 
 // Initialize mongo connection
 DbContext.prototype.start = function() {
-    var deferred = Q.defer();
+    var deferred = Promise.defer();
     
     MongoClient.connect(config.url, (err, db) => {
         if (err) {

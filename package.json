@@ -6,8 +6,8 @@
     "start": "node ./socala.js"
   },
   "dependencies": {
-    "body-parser": "~1.13.2",
+    "body-parser": "^1.13.3",
     "express": "~4.13.1",
-    "q": "^1.4.1"
+    "mongodb": "^2.1.14"
   }
 }
