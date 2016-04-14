@@ -1,6 +1,7 @@
 
 var MongoClient = require('mongodb').MongoClient;
 var userDb = require('./userDb');
+var eventDb = require('./eventDb');
 var config = require('../dbConfig.json');
 
 function DbContext() {
