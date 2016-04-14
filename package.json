@@ -7,9 +7,12 @@
   },
   "dependencies": {
     "body-parser": "^1.13.3",
+    "cookie-parser": "^1.4.1",
     "express": "~4.13.1",
+    "express-session": "^1.13.0",
     "google-auth-library": "^0.9.7",
     "googleapis": "^5.0.0",
-    "mongodb": "^2.1.14"
+    "mongodb": "^2.1.14",
+    "node-uuid": "^1.4.7"
   }
 }
