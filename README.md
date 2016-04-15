@@ -19,3 +19,11 @@ Create config.json
         "clientId": "Client id generated from google dev console"
     }
 ```
+
+Create user.json to test the api without going through the authentication flow
+``` json
+{
+    "accessToken": "",
+    "refreshToken": "",
+    "email": ""
+```

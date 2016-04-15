@@ -1,8 +1,15 @@
 
-var MongoClient = require('mongodb').MongoClient;
-var userDb = require('./userDb');
-var eventDb = require('./eventDb');
-var config = require('../dbConfig.json');
+'use strict';
+
+let Promise = require('bluebird');
+let MongoDB = require('mongodb');
+Promise.promisifyAll(MongoDB);
+
+let mongoClient = MongoDB.MongoClient;
+
+let userDb = require('./userDb');
+let eventDb = require('./eventDb');
+let config = require('../dbConfig.json');
 
 function DbContext() {
     this.db = null;
@@ -10,23 +17,32 @@ function DbContext() {
 
 // Initialize mongo connection
 DbContext.prototype.start = function() {
-    var deferred = Promise.defer();
+    // let deferred = Promise.defer();
     
-    MongoClient.connect(config.url, (err, db) => {
-        if (err) {
-            deferred.reject("Could not connect");
-        }
-        
+    return mongoClient.connectAsync(config.url).then(db => {
         this.db = db;
-        
-        // Attach db instance to all collection-specific databases
         userDb.setDb(this.db);
-        deferred.resolve();
-    });
+        // deferred.resolve();
+    }, err => {
+        Promise.reject("Could not connect");
+    }); 
     
-    return deferred.promise;
+    
+    // (err, db) => {
+    //     if (err) {
+    //         deferred.reject("Could not connect");
+    //     }
+        
+    //     this.db = db;
+        
+    //     // Attach db instance to all collection-specific databases
+    //     userDb.setDb(this.db);
+    //     deferred.resolve();
+    // });
+    
+    // return deferred.promise;
 };
 
-var dbContext = new DbContext();
+let dbContext = new DbContext();
 
 module.exports = dbContext;
