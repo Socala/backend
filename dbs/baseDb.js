@@ -35,16 +35,12 @@ class BaseDb {
     push(props, fieldToPush) {
         return this.collection.updateOneAsync(props, {
             $push: fieldToPush
-        }).then(() => {
-            return item;
         });
     }
 
     pull(props, fieldToPull) {
         return this.collection.updateOneAsync(props, {
             $pull: fieldToPull
-        }).then(() => {
-            return item;
         });
     }
     

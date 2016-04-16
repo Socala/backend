@@ -78,9 +78,9 @@ function authenticate(req) {
     
     // !!! This works disabling for testing purposes !!!
     
-    // if (!req.headers.authorization) {
-    //     return Promise.reject(new Error("Failed to authenticate"));
-    // }
+    if (!req.headers.authorization) {
+        return Promise.reject(new Error("Failed to authenticate"));
+    }
     
     // return new Promise((resolve, reject) => {
     

@@ -1,13 +1,10 @@
 'use strict';
+
 let express = require('express');
 let router = express.Router();
 let userDb = require('../dbs/userDb');
 
 // How to use google calendar API: https://developers.google.com/google-apps/calendar/quickstart/nodejs#step_3_set_up_the_sample
-
-// router.use('/', (req, res, next) =>
-//   // Get email from Google API using oAuthToken
-// );
 
 // Follow this example for creating routes
 
@@ -27,27 +24,21 @@ router.get('/all', (req, res) => {
     });
 });
 
-// Add user
-// Body: user
-// Response: user
-router.post('/', (req, res) => {
-    userDb.insert(req.body).then(userDb.getByEmail(req.body.email)).then(user => {
-        res.json(user);
-    }, err => {
-        res.json({
-          error: err
-        });
-    });
-});
-
 // Get user
 // Response: user
 router.get('/', (req, res) => {
-    userDb.getByEmail(req.session.email).then(user => {
+    if (!req.query.email) {
+        res.json({
+            error: "No email provided"
+        });
+        return;
+    }
+    
+    userDb.getByEmail(req.query.email).then(user => {
         res.json(user);
     }, err => {
         res.json({
-          error: err
+            error: err
         });
     });
 });
@@ -69,48 +60,58 @@ router.put('/', (req, res) => {
 
 // Add Friend
 // Response: User
-router.get('/friend/add?:email', (req, res) => {
-    userDb.getByEmail(req.params).then(friend => {
-        if (!friend) {
-            res.json({
-                error: "Failed to add friend: No such user"
-            });
-        } else {
-            userDb.push({email: req.session.email}, {friends: friend.email})
-		.then(userDb.getByEmail(req.session.email)).then(user => { 
-                    res.json(user);
-                }, err => {
-                    res.json({
-                        error: err
-                    });
-		});
-        }
-    }, err => {
+router.get('/friends/add', (req, res) => {
+    if (!req.query.email) {
         res.json({
-	    error: err
+            error: "Failed to add friend: No email provided"
         });
-    });
+        
+        return;
+    } else if (req.session.email === req.query.email) {
+        res.json({
+            error: "Cannot add yourself!"
+        });
+        
+        return;
+    }
+    
+    userDb.addFriend(req.session.email, req.query.email)
+        .then(friend => {
+            return res.json(friend);
+        }).catch(err => {
+            res.json({
+                error: err
+            });
+        });
 });
 
 // Remove Friend
 // Response: Boolean
-router.get('/friend/remove?:email', (req, res) => {
-    userDb.pull({email: req.session.email}, {friends: friend.email}).then(result => {
-	userDb.getByEmail(req.session.email)).then(user => { 
-            res.json({
-		    status: true
-                });
-            }, err => {
-                res.json({
-			status: false
-                });
-            });
-        }
-    }, err => {
+router.get('/friends/remove', (req, res) => {
+    if (!req.query.email) {
         res.json({
-		status: false:
+            error: "Failed to remove friend: No email provided"
         });
-    });
+        
+        return;
+    } else if (req.session.email === req.query.email) {
+        res.json({
+            error: "Cannot remove yourself!"
+        });
+        
+        return;
+    }
+    
+    userDb.removeFriend(req.session.email, req.query.email)
+        .then(() => {
+            res.json({
+                status: true
+            });
+        }).catch(err => {
+            res.json({
+                status: false
+            });
+        });
 });
 
 module.exports = router;
