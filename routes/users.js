@@ -3,6 +3,14 @@
 let express = require('express');
 let router = express.Router();
 let userDb = require('../dbs/userDb');
+let ModelFactory = require('../factories/modelFactory');
+let google = require('googleapis');
+let OAuth2 = google.auth.OAuth2;
+
+let config = require('../config.json');
+
+let modelFactory = new ModelFactory();
+
 
 // How to use google calendar API: https://developers.google.com/google-apps/calendar/quickstart/nodejs#step_3_set_up_the_sample
 
@@ -35,8 +43,10 @@ router.get('/', (req, res) => {
     }
     
     userDb.getByEmail(req.query.email).then(user => {
+        return modelFactory.fromUserDbModel(user, createAuth(user), false);
+    }).then(user => {
         res.json(user);
-    }, err => {
+    }).catch(err => {
         res.json({
             error: err
         });
@@ -77,6 +87,8 @@ router.get('/friends/add', (req, res) => {
     
     userDb.addFriend(req.session.email, req.query.email)
         .then(friend => {
+            return modelFactory.fromUserDbModel(friend, createAuth(friend), false);
+        }).then(friend => {
             return res.json(friend);
         }).catch(err => {
             res.json({
@@ -113,5 +125,17 @@ router.get('/friends/remove', (req, res) => {
             });
         });
 });
+
+function createAuth(user) {
+    let auth = new OAuth2(config.clientId, config.clientSecret, config.redirectUrl);
+    
+    auth.setCredentials({
+        access_token: user.accessToken,
+        refresh_token: user.refreshToken,
+        expiry_date: user.expiry_date || true
+    });
+    
+    return auth;
+}
 
 module.exports = router;

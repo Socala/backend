@@ -19,7 +19,7 @@ app.use('/users', require('./routes/signIn'));
 
 // This middleware requires a user to be authenticated before allowing access to the rest of the api
 app.use((req, res,next) => {
-    if (!req.session.email || !req.session.accessToken) {
+    if (!req.session.email || !req.session.auth) {
         res.json({
             error: "User not authenticated"
         });

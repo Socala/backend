@@ -13,7 +13,7 @@ class UserDb extends BaseDb {
             email: email
         });
     }
-    
+        
     addFriend(userEmail, friendEmail) {
         return this.getByEmail(userEmail).then(user => {
             if (user.friends.indexOf(friendEmail) !== -1) {
