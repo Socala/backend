@@ -11,6 +11,9 @@ let oauth2Api = google.oauth2("v2");
 let OAuth2 = google.auth.OAuth2;
 
 let config = require('../config.json');
+let ModelFactory = require('../factories/modelFactory');
+
+let modelFactory = new ModelFactory();
 
 router.get('/signin', (req, res) => {
     
@@ -20,10 +23,12 @@ router.get('/signin', (req, res) => {
         return userDb.getByEmail(req.session.email);
     }).then(user => {
         if (user) {
-            return user;
+            return modelFactory.fromUserDbModel(user, req.session.auth);
         }
         
-        return constructUser(req.session.email, req.session.auth);
+        return constructUser(req.session.email, req.session.auth).then(user => {
+            return modelFactory.fromUserDbModel(user, req.session.auth);
+        });
     }).then(user => {
         res.json(user);
     }).catch(err => {
