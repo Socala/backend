@@ -1,16 +1,17 @@
-'use strict'
+'use strict';
 
 let userDb = require('../dbs/userDb');
 let express = require('express');
 let router = express.Router();
 let Promise = require('bluebird');
+let AuthUtils = require('../utils/authUtils');
 
 let uuid = require('node-uuid');
 
 let google = require('googleapis');
+let OAuth2 = google.auth.OAuth2;
 let calendarApi = google.calendar("v3");
 let oauth2Api = google.oauth2("v2");
-let OAuth2 = google.auth.OAuth2;
 
 let config = require('../config.json');
 let ModelFactory = require('../factories/modelFactory');
@@ -19,24 +20,23 @@ let modelFactory = new ModelFactory();
 
 router.get('/signin', (req, res) => {
     
-    // TODO: Transform user into format that is useable by front-end
-    
     authenticate(req).then(() => {
         return userDb.getByEmail(req.session.email);
     }).then(user => {
+        let auth = AuthUtils.createAuthFromSession(req.session);
+        
         if (user) {
-            return modelFactory.fromUserDbModel(user, req.session.auth, true);
+            return modelFactory.fromUserDbModel(user, auth, "USER");
         }
         
-        return constructUser(req.session.email, req.session.auth).then(user => {
-            return modelFactory.fromUserDbModel(user, req.session.auth, true);
+        return constructUser(req.session.email, auth).then(user => {
+            return modelFactory.fromUserDbModel(user, auth, "USER");
         });
     }).then(user => {
         res.json(user);
     }).catch(err => {
-        return res.json({
-            error: "Failed to authenticate"
-        });
+        console.trace(err.stack);
+        return res.status(500).send();
     });
 });
 
@@ -44,6 +44,7 @@ function constructUser(email, auth) {
     let user = {
         accessToken: auth.credentials.access_token,
         refreshToken: auth.credentials.refresh_token,
+        expiryDate: auth.credentials.expiry_date,
         email: email,
         calendar: {
             events: []
@@ -54,18 +55,18 @@ function constructUser(email, auth) {
     return Promise.promisify(oauth2Api.userinfo.get)({
         auth: auth
     }).then(userInfo => {
-        user.displayName = userInfo.displayName || "";
+        user.displayName = userInfo.name || "";
         
-        return Promise.promisify(calendarApi.calendarList.get)({
-            calendarId: "primary",
-            auth: auth
-        });
-    }).then(calendar => {
-        user.calendar.googleCalendarId = calendar.id;
+        user.calendar.googleCalendarId = "primary";
         user.calendar.id = uuid.v4();
         
+        var timeMin = new Date();
+        timeMin.setMonth(timeMin.getMonth() - 3);
+        
         return Promise.promisify(calendarApi.events.list)({
-            calendarId: calendar.id,
+            maxResults: 50,
+            calendarId: "primary",
+            timeMin: modelFactory.toRFC3339(timeMin),
             auth: auth
         });
     }).then(events => {
@@ -74,8 +75,7 @@ function constructUser(email, auth) {
             return {
                 id: uuid.v4(),
                 googleEventId: event.id,
-                privacyLevel: "HIDDEN",
-                rsvpable: false
+                privacyLevel: "HIDDEN"
             };
         });
         
@@ -87,56 +87,47 @@ function authenticate(req) {
     
     let oauth2Client = new OAuth2(config.clientId, config.clientSecret, config.redirectUrl);
     
-    // !!! This works disabling for testing purposes !!!
+    if (!req.headers.authorization) {
+        return Promise.reject(new Error("Failed to authenticate"));
+    }
     
-    // if (!req.headers.authorization) {
-    //     return Promise.reject(new Error("Failed to authenticate"));
-    // }
-    
-    // return new Promise((resolve, reject) => { 
-    //     let code = req.headers.authorization.split(' ')[1];
+    return new Promise((resolve, reject) => { 
+        let code = req.headers.authorization.split(' ')[1];
         
-    //     oauth2Client.getToken(code, (err, tokens) => {
-    //         if (err || !tokens)  {
-    //             reject(new Error("Failed to authenticate"));
-    //             return;
-    //         }
+        oauth2Client.getToken(code, (err, tokens) => {
+            if (err || !tokens)  {
+                reject(new Error("Failed to authenticate"));
+                return;
+            }
             
-    //         oauth2Client.verifyIdToken(tokens.id_token, config.clientId, (err, login) => {
-    //             if (err || !login) {
-    //                 reject(new Error("Failed to authenticate"));
-    //                 return;
-    //             }
+            oauth2Client.verifyIdToken(tokens.id_token, config.clientId, (err, login) => {
+                if (err || !login) {
+                    reject(new Error("Failed to authenticate"));
+                    return;
+                }
                 
-    //             req.session.email = login.getPayload().email;
+                req.session.email = login.getPayload().email;
+                req.session.accessToken = tokens.access_token;
+                req.session.refreshToken = tokens.refresh_token;
+                req.session.expiryDate = tokens.expiry_date;
                 
-    //             oauth2Client.setCredentials({
-    //                 access_token: tokens.access_token,
-    //                 refresh_token: tokens.refresh_token,
-    //                 expiry_date: tokens.expiry_date
-    //             });
-                
-    //             req.session.auth = oauth2Client;
-    //             resolve();
-    //         });
-    //     });
-    // });
-    
-    
-    // // Pulling test user info from a config that isn't committed for testing purposes
-    let user = require('../user.json');
-    
-    req.session.email = user.email;
-    
-    oauth2Client.setCredentials({
-        access_token: user.accesToken,
-        refresh_token: user.refreshToken,
-        expiry_date: true
+                resolve();
+            });
+        });
     });
     
-    req.session.auth = oauth2Client;
     
-    return Promise.resolve();
+    // For testing purposes
+    
+    // let user = require('../user.json');
+    
+    // req.session.email = user.email;
+    // req.session.accessToken = user.accessToken;
+    // req.session.refreshToken = user.refreshToken;
+    // req.session.expiryDate = user.expiryDate;
+    
+    
+    // return Promise.resolve();
 }
 
 module.exports = router;

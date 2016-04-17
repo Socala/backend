@@ -4,138 +4,81 @@ let express = require('express');
 let router = express.Router();
 let userDb = require('../dbs/userDb');
 let ModelFactory = require('../factories/modelFactory');
-let google = require('googleapis');
-let OAuth2 = google.auth.OAuth2;
-
-let config = require('../config.json');
+let AuthUtils = require('../utils/authUtils');
 
 let modelFactory = new ModelFactory();
-
-
-// How to use google calendar API: https://developers.google.com/google-apps/calendar/quickstart/nodejs#step_3_set_up_the_sample
-
-// Follow this example for creating routes
-
-// NOTE: You will have to transform the resources pulled from the database into a format used by the front-end
-// For example, removing the google calendar api ids and enumerating the properties by making a call to the google calendar api
-// I would make a factory for this!
-// The factory would work by taking in a user from the db, make calls to the google calendar api, construct a front-end usable user and then return this new user object
-
-// This one is just here for our testing purposes
-router.get('/all', (req, res) => {
-    userDb.getAll().then(users => {
-        res.json(users);
-    }, err => {
-        res.json({
-            error: err
-        });
-    });
-});
 
 // Get user
 // Response: user
 router.get('/', (req, res) => {
     if (!req.query.email) {
-        res.json({
-            error: "No email provided"
-        });
+        res.status(500).send();
         return;
     }
     
-    userDb.getByEmail(req.query.email).then(user => {
-        return modelFactory.fromUserDbModel(user, createAuth(user), false);
+    userDb.getByEmail(req.session.email).then(user => {
+        if (user.email === req.query.email) {
+            return "USER";
+        }
+        return null;
+    }).then(relationship => {
+        return userDb.getByEmail(req.query.email).then(user => {
+            
+            if (!relationship) {
+                relationship = user.friends.indexOf(req.session.email) !== -1 ? "FRIEND" : "NONE";
+            }
+            
+            return AuthUtils.createAuth(user).then(auth => {
+                return modelFactory.fromUserDbModel(user, auth, relationship);
+            });
+        });
     }).then(user => {
         res.json(user);
     }).catch(err => {
-        res.json({
-            error: err
-        });
-    });
-});
-
-// Update user
-// Body: user
-// Response: Boolean
-router.put('/', (req, res) => {
-    userDb.update(req.body).then(result => {
-        res.json({
-            status: true
-        });
-    }, err => {
-        res.json({
-            status: false
-        });
+        console.trace(err.stack);
+        res.status(500).send();
     });
 });
 
 // Add Friend
 // Response: User
 router.get('/friends/add', (req, res) => {
-    if (!req.query.email) {
-        res.json({
-            error: "Failed to add friend: No email provided"
-        });
-        
-        return;
-    } else if (req.session.email === req.query.email) {
-        res.json({
-            error: "Cannot add yourself!"
-        });
-        
+    if (!req.query.email || req.session.email === req.query.email) {
+        res.status(500).send();
         return;
     }
     
     userDb.addFriend(req.session.email, req.query.email)
         .then(friend => {
-            return modelFactory.fromUserDbModel(friend, createAuth(friend), false);
+            
+            let relationship = friend.friends.indexOf(req.session.email) !== -1 ? "FRIEND" : "NONE";
+            
+            return AuthUtils.createAuth(friend).then(auth => {
+                return modelFactory.fromUserDbModel(friend, auth, relationship);
+            });
         }).then(friend => {
             return res.json(friend);
         }).catch(err => {
-            res.json({
-                error: err
-            });
+            console.trace(err.stack);
+            res.status(500).send();
         });
 });
 
 // Remove Friend
 // Response: Boolean
 router.get('/friends/remove', (req, res) => {
-    if (!req.query.email) {
-        res.json({
-            error: "Failed to remove friend: No email provided"
-        });
-        
-        return;
-    } else if (req.session.email === req.query.email) {
-        res.json({
-            error: "Cannot remove yourself!"
-        });
-        
+    if (!req.query.email || req.session.email === req.query.email) {
+        res.status(500).send();
         return;
     }
     
     userDb.removeFriend(req.session.email, req.query.email)
         .then(() => {
-            res.json({
-                status: true
-            });
+            res.json(true);
         }).catch(err => {
-            res.json({
-                status: false
-            });
+            console.trace(err.stack);
+            res.status(500).send();
         });
 });
-
-function createAuth(user) {
-    let auth = new OAuth2(config.clientId, config.clientSecret, config.redirectUrl);
-    
-    auth.setCredentials({
-        access_token: user.accessToken,
-        refresh_token: user.refreshToken,
-        expiry_date: user.expiry_date || true
-    });
-    
-    return auth;
-}
 
 module.exports = router;

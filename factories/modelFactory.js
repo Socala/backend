@@ -2,6 +2,7 @@
 
 let userDb = require('../dbs/userDb');
 let Promise = require('bluebird');
+let AuthUtils = require('../utils/authUtils');
 
 let google = require('googleapis');
 let OAuth2 = google.auth.OAuth2;
@@ -17,7 +18,7 @@ class ModelFactory {
     
     getEventColor(colorId, auth) {
         if (this.colors) {
-            return Promise.resolve(this.colors.event[colorId].foreground);
+            return Promise.resolve(this.colors.event[colorId].background);
         }
         
         return Promise.promisify(calendarApi.colors.get)({
@@ -25,13 +26,15 @@ class ModelFactory {
         }).then(colors => {
             this.colors = colors;
             
-            return this.colors.event[colorId].foreground;
+            return this.colors.event[colorId].background;
         });
     }
     
-    fromUserDbModel(dbUser, auth, enumerateFriends) {
+    fromUserDbModel(dbUser, auth, relationship) {
         
-        enumerateFriends = !!enumerateFriends;
+        if (!relationship) {
+            relationship = "USER";
+        }
         
         let user = {
             displayName: dbUser.displayName,
@@ -39,10 +42,10 @@ class ModelFactory {
             email: dbUser.email
         };
         
-        if (!enumerateFriends) {
+        if (relationship !== "USER") {
             user.friends = [];
             
-            return this.fromCalendarDbModel(dbUser.calendar, auth).then(calendar => {
+            return this.fromCalendarDbModel(dbUser.calendar, auth, relationship).then(calendar => {
                 user.calendar = calendar;
                 
                 return user;
@@ -51,22 +54,16 @@ class ModelFactory {
         
         let friendPromises = dbUser.friends.map(f => {
             return userDb.getByEmail(f).then(f => {
-                let auth = new OAuth2(config.clientId, config.clientSecret, config.redirectUrl);
-                
-                auth.setCredentials({
-                    access_token: f.accessToken,
-                    refresh_token: f.refreshToken,
-                    expiry_date: f.expiry_date
+                return AuthUtils.createAuth(f).then(auth => {
+                    return this.fromUserDbModel(f, auth, "FRIEND");
                 });
-                
-                return this.fromUserDbModel(f, auth, false);
             });
         });
         
         return Promise.all(friendPromises).then(friends => {
             user.friends = friends;
             
-            return this.fromCalendarDbModel(dbUser.calendar, auth);
+            return this.fromCalendarDbModel(dbUser.calendar, auth, relationship);
         }).then(calendar => {
             user.calendar = calendar;
             
@@ -78,8 +75,6 @@ class ModelFactory {
         let event = {
             id: dbEvent.id,
             privacyLevel: dbEvent.privacyLevel,
-            rsvpable: dbEvent.rsvpable,
-            attendees: [],
             hasRecurrence: false
         };
         
@@ -88,7 +83,7 @@ class ModelFactory {
             eventId: dbEvent.googleEventId,
             auth: auth
         }).then(googleEvent => {
-            event.summary = googleEvent.summary;
+            event.title = googleEvent.summary;
             
             // TODO: Adjust to user's time zone
             if (!googleEvent.start.dateTime) {
@@ -111,13 +106,22 @@ class ModelFactory {
         });
     }
     
-    fromCalendarDbModel(dbCalendar, auth) {
+    fromCalendarDbModel(dbCalendar, auth, relationship) {
+        
+        if (!relationship) {
+            relationship = "USER";
+        }
+        
         let calendar =  {
             id: dbCalendar.id,
             events: []
         };
         
-        let eventPromises = dbCalendar.events.map(e => {
+        let eventPromises = dbCalendar.events.filter(e => {
+            return relationship === "USER" || 
+                e.privacyLevel === "PUBLIC" ||
+                (e.privacyLevel === "FRIENDS" && relationship === "FRIEND");
+        }).map(e => {
             return this.fromEventDbModel(dbCalendar.googleCalendarId, e, auth);
         });
         
@@ -132,14 +136,14 @@ class ModelFactory {
     }
     
     toRFC3339(d) {
-        function pad(n){return n<10 ? '0'+n : n}
-        return d.getUTCFullYear()+'-'
-            + pad(d.getUTCMonth()+1)+'-'
-            + pad(d.getUTCDate())+'T'
-            + pad(d.getUTCHours())+':'
-            + pad(d.getUTCMinutes())+":"
-            + pad(d.getUTCSeconds())
-            + "-00:00";
+        function pad(n){return n<10 ? '0'+n : n; }
+        return d.getUTCFullYear()+'-' +
+            pad(d.getUTCMonth()+1)+'-' +
+            pad(d.getUTCDate())+'T' +
+            pad(d.getUTCHours())+':' +
+            pad(d.getUTCMinutes())+":" +
+            pad(d.getUTCSeconds()) +
+            "-00:00";
     }
 }
 

@@ -8,7 +8,6 @@ Promise.promisifyAll(MongoDB);
 let mongoClient = MongoDB.MongoClient;
 
 let userDb = require('./userDb');
-let eventDb = require('./eventDb');
 let config = require('../dbConfig.json');
 
 function DbContext() {
