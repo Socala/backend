@@ -16,14 +16,14 @@ let calendarApi = google.calendar("v3");
 // Body: user
 // Response: Event
 router.post('/', (req, res) => {
-    
+
     if (!req.body) {
         res.status(500).send();
         return;
     }
-    
+
     let event = req.body;
-    
+
     let resource = {
         colorId: "1",
         summary: event.title,
@@ -34,11 +34,11 @@ router.post('/', (req, res) => {
             dateTime: event.end
         }
     };
-    
+
     let auth = AuthUtils.createAuthFromSession(req.session);
-    
+
     userDb.getByEmail(req.session.email).then(user => {
-        
+
         return Promise.promisify(calendarApi.events.insert)({
             calendarId: user.calendar.googleCalendarId,
             resource: resource,
@@ -52,15 +52,15 @@ router.post('/', (req, res) => {
     }).then(result => {
         let user = result.user;
         let googleEvent = result.googleEvent;
-        
+
         let dbEvent = {
             id: uuid.v4(),
             privacyLevel: event.privacyLevel,
             googleEventId: googleEvent.id
         };
-        
+
         user.calendar.events.push(dbEvent);
-        
+
         return userDb.update(user).then(() => {
             return modelFactory.fromEventDbModel(user.calendar.googleCalendarId, dbEvent, auth);
         });
@@ -77,12 +77,12 @@ router.delete('/:id', (req, res) => {
         res.status(500).send();
         return;
     }
-    
+
     userDb.getByEmail(req.session.email).then(user => {
         let dbEvent = user.calendar.events.filter(e => {
             return e.id === req.params.id;
         })[0];
-        
+
         return Promise.promisify(calendarApi.events.delete)({
             calendarId: user.calendar.googleCalendarId,
             eventId: dbEvent.googleEventId,
@@ -90,12 +90,12 @@ router.delete('/:id', (req, res) => {
         }).then(() => {
             return user;
         });
-        
+
     }).then(user => {
         user.calendar.events = user.calendar.events.filter(e => {
             return e.id !== req.params.id;
         });
-        
+
         return userDb.update(user);
     }).then(() => {
         return res.json(true);
@@ -109,14 +109,14 @@ router.delete('/:id', (req, res) => {
 // Body: Event
 // Response: Boolean
 router.put('/', (req, res) => {
-    
+
     if (!req.body) {
         res.status(500).send();
         return;
     }
-    
+
     let event = req.body;
-    
+
     let resource = {
         summary: event.title,
         start: {
@@ -126,15 +126,21 @@ router.put('/', (req, res) => {
             dateTime: event.end
         }
     };
-    
+
     let auth = AuthUtils.createAuthFromSession(req.session);
-    
-    userDb.getByEmail(req.session.email).then(user => {
-        
+
+    let colorPromise = !!event.color ? 
+        modelFactory.getColorId(event.color, auth) : new Promise.resolve(1);
+
+    colorPromise.then(c => {
+        resource.colorId = c;
+    }).then(() => {
+        return userDb.getByEmail(req.session.email);
+    }).then(user => {
         let dbEvent = user.calendar.events.filter(e => {
             return e.id === event.id;
         })[0];
-        
+
         return Promise.promisify(calendarApi.events.update)({
             calendarId: user.calendar.googleCalendarId,
             eventId: dbEvent.googleEventId,
@@ -149,9 +155,9 @@ router.put('/', (req, res) => {
     }).then(result => {
         let user = result.user;
         let dbEvent = result.dbEvent;
-        
+
         dbEvent.privacyLevel = event.privacyLevel;
-        
+
         return userDb.update(user);
     }).then(() => {
         res.json(true);

@@ -33,6 +33,7 @@ class AuthUtils {
             auth.refreshAccessToken((err, tokens) => {
                 if (err) {
                     reject(err);
+                    return;
                 }
                 
                 user.accessToken = tokens.access_token;

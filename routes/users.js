@@ -16,21 +16,15 @@ router.get('/', (req, res) => {
         return;
     }
     
-    userDb.getByEmail(req.session.email).then(user => {
-        if (user.email === req.query.email) {
-            return "USER";
+    userDb.getByEmail(req.query.email).then(user => {
+        let relationship = user.email === req.session.email ? "USER" : null;
+        
+        if (!relationship) {
+            relationship = user.friends.indexOf(req.session.email) !== -1 ? "FRIEND" : "NONE";
         }
-        return null;
-    }).then(relationship => {
-        return userDb.getByEmail(req.query.email).then(user => {
-            
-            if (!relationship) {
-                relationship = user.friends.indexOf(req.session.email) !== -1 ? "FRIEND" : "NONE";
-            }
-            
-            return AuthUtils.createAuth(user).then(auth => {
-                return modelFactory.fromUserDbModel(user, auth, relationship);
-            });
+        
+        return AuthUtils.createAuth(user).then(auth => {
+            return modelFactory.fromUserDbModel(user, auth, relationship);
         });
     }).then(user => {
         res.json(user);

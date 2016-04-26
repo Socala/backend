@@ -64,20 +64,12 @@ function constructUser(email, auth) {
         timeMin.setMonth(timeMin.getMonth() - 3);
         
         return Promise.promisify(calendarApi.events.list)({
-            maxResults: 50,
             calendarId: "primary",
             timeMin: modelFactory.toRFC3339(timeMin),
             auth: auth
         });
     }).then(events => {
-        
-        user.calendar.events = events.items.map(event => {
-            return {
-                id: uuid.v4(),
-                googleEventId: event.id,
-                privacyLevel: "HIDDEN"
-            };
-        });
+        user.calendar.events = events.items.map(modelFactory.toDbEvent);
         
         return userDb.insert(user);
     });
@@ -115,19 +107,6 @@ function authenticate(req) {
             });
         });
     });
-    
-    
-    // For testing purposes
-    
-    // let user = require('../user.json');
-    
-    // req.session.email = user.email;
-    // req.session.accessToken = user.accessToken;
-    // req.session.refreshToken = user.refreshToken;
-    // req.session.expiryDate = user.expiryDate;
-    
-    
-    // return Promise.resolve();
 }
 
 module.exports = router;
